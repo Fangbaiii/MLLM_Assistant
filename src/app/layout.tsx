@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { Cormorant_Garamond, Geist_Mono } from "next/font/google";
 import { AppProviders } from "@/components/providers/app-providers";
 import "./globals.css";
-import "highlight.js/styles/github-dark.css";
-import "katex/dist/katex.min.css";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",

@@ -13,7 +13,7 @@ import {
   Sparkles,
   Workflow,
 } from "@/components/ui/icons";
-import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
+import { LazyMarkdownRenderer } from "@/components/chat/lazy-markdown-renderer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,7 +40,7 @@ function EvidenceTablePreview({ content }: { content: string }) {
   const tableHtml = normalizeTableHtml(content);
 
   if (!tableHtml) {
-    return <MarkdownRenderer content={content} className="text-sidebar-foreground/84" />;
+    return <LazyMarkdownRenderer content={content} className="text-sidebar-foreground/84" />;
   }
 
   return (
@@ -307,12 +307,12 @@ export function EvidenceDocumentCard({ document, asset }: EvidenceDocumentCardPr
                           </span>
                           <span>{formatPercent(block.confidence)}</span>
                         </div>
-                        <MarkdownRenderer content={block.content} className="text-sidebar-foreground/85" />
+                        <LazyMarkdownRenderer content={block.content} className="text-sidebar-foreground/85" />
                       </div>
                     ))
                   ) : (
                     <div className="rounded-2xl border border-sidebar-border/75 bg-card/55 p-4">
-                      <MarkdownRenderer content={currentPage.markdown} className="text-sidebar-foreground/85" />
+                      <LazyMarkdownRenderer content={currentPage.markdown} className="text-sidebar-foreground/85" />
                     </div>
                   )}
                 </div>
@@ -382,7 +382,7 @@ export function EvidenceDocumentCard({ document, asset }: EvidenceDocumentCardPr
                         </span>
                         <span>{formatPercent(block.confidence)}</span>
                       </div>
-                      <MarkdownRenderer content={block.content} className="text-sidebar-foreground/86" />
+                      <LazyMarkdownRenderer content={block.content} className="text-sidebar-foreground/86" />
                     </div>
                   ))}
                 </div>
@@ -403,7 +403,7 @@ export function EvidenceDocumentCard({ document, asset }: EvidenceDocumentCardPr
                         </span>
                         <span>{blockKindLabels[block.kind]}</span>
                       </div>
-                      <MarkdownRenderer content={block.content} className="text-sidebar-foreground/84" />
+                      <LazyMarkdownRenderer content={block.content} className="text-sidebar-foreground/84" />
                     </div>
                   ))}
                 </div>

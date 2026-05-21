@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Bot, ChevronDown, ImageIcon, Sparkles, UserRound } from "@/components/ui/icons";
 import { useState } from "react";
-import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
+import { LazyMarkdownRenderer } from "@/components/chat/lazy-markdown-renderer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,7 +102,7 @@ export function ChatMessage({ message }: { message: ChatMessageType }) {
           ) : (
             <>
               <MessageModeBadge mode={message.mode} />
-              <MarkdownRenderer content={message.content} />
+              <LazyMarkdownRenderer content={message.content} />
               {message.isStreaming ? (
                 <span className="mt-2 inline-flex items-center gap-2 text-xs text-primary/85">
                   <motion.span

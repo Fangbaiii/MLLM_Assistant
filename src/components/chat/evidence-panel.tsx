@@ -11,8 +11,8 @@ import {
   Sparkles,
   Workflow,
 } from "@/components/ui/icons";
-import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { EvidenceDocumentCard } from "@/components/chat/evidence-document-card";
+import { LazyMarkdownRenderer } from "@/components/chat/lazy-markdown-renderer";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -175,7 +175,7 @@ export function EvidencePanel({ className, embedded = false }: { className?: str
                       </span>
                       <span className="text-xs text-muted-foreground">{Math.round(block.confidence * 100)}%</span>
                     </div>
-                    <MarkdownRenderer content={block.text} className="text-sidebar-foreground/82" />
+                    <LazyMarkdownRenderer content={block.text} className="text-sidebar-foreground/82" />
                   </motion.div>
                 ))
               ) : (
