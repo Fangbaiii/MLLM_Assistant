@@ -1,218 +1,128 @@
-# MLLM Studio
+# MLLM Studio 🚀
 
-一个前端 AI SaaS Demo，面向多模态大模型课程展示。
+[![Next.js](https://img.shields.io/badge/Next.js-15+-black?logo=next.js)](https://nextjs.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma)](https://www.prisma.io/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 功能
+**MLLM Studio** 是一款多模态 AI 交互设计的全栈工作台。它集成了先进的文档解析、安全的用户管理体系以及高度可定制的 Prompt 引擎，旨在为用户提供从数据上传到深度推理的闭环体验。
 
-- `/`：dashboard 风格首页
-- `/chat`：ChatGPT 风格工作台
-- 左侧会话管理：新建、搜索、重命名、置顶、复制、清空、删除
-- 图片上传：拖拽、点击、多图、预览、删除、进度、类型校验
-- 模型回答：Markdown、LaTeX、代码高亮、代码复制、推理折叠
-- 证据面板：OCR、截图预览、VLM 证据 badge
-- mock 接口：`POST /api/chat`、`POST /api/upload`、`GET /api/history`
+---
 
-## 技术栈
+## ✨ 核心特性
 
-- Next.js 16
-- React 19
-- TypeScript
-- TailwindCSS v4
-- shadcn/ui
-- Framer Motion
-- Lucide React
-- Zustand
-- React Query
-- Axios
-- react-markdown / remark-gfm / rehype-highlight / rehype-katex / katex
+- 🔐 **全栈安全体系**: 集成 Auth.js (v5)，支持邮箱/密码登录与注册，具备完善的路由保护机制。
+- 📦 **持久化数据存储**: 基于 Prisma + SQLite，确保所有聊天记录、会话元数据实时落库。
+- 🛡️ **账号级数据隔离**: 严密的租户隔离逻辑，确保用户隐私与对话记忆的绝对独立。
+- 🧠 **动态 Prompt 引擎**: 数据库级 System Prompt 管理，预设“直接回答”、“详细解释”、“深度思考”三种专业模式。
+- 📄 **多模态文件处理**: 支持 PDF 与多格式图片上传，内置 OCR 识别流与视觉路由分发。
+- 🧪 **证据链路追踪**: 独特的“证据面板”设计，支持将模型推理依据与原始文档片段精准对齐。
 
-## 本地运行
+---
 
-### 1. 安装依赖
+## 🛠️ 技术架构
 
-在项目目录执行：
+### 前端 (Frontend)
+- **Framework**: [Next.js 15+](https://nextjs.org/) (App Router)
+- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
+- **State Management**: [Zustand](https://zustand-demo.pmnd.rs/)
+- **Animation**: [Framer Motion](https://www.framer.com/motion/)
+- **Components**: [shadcn/ui](https://ui.shadcn.com/)
 
-```bash
-pnpm install
+### 后端 (Backend)
+- **Runtime**: [Node.js](https://nodejs.org/)
+- **Database**: [SQLite](https://www.sqlite.org/) (Local File-based)
+- **ORM**: [Prisma 6](https://www.prisma.io/)
+- **Authentication**: [Auth.js](https://authjs.dev/) (NextAuth v5 Beta)
+
+---
+
+## 🚀 快速开始
+
+### 前置要求
+- **Node.js**: v18.0.0 或更高版本
+- **pnpm**: v9.0.0 或更高版本
+
+### 安装步骤
+
+1. **克隆仓库**
+   ```bash
+   git clone https://github.com/Fangbaiii/MLLM_Assistant.git
+   cd MLLM_Assistant
+   ```
+
+2. **安装依赖**
+   ```bash
+   pnpm install
+   ```
+
+3. **环境配置**
+   在项目根目录创建 `.env` 文件，并填入以下必要变量：
+   ```env
+   # 数据库连接
+   DATABASE_URL="file:./dev.db"
+   # Auth.js 密钥 (可通过 npx auth secret 生成)
+   AUTH_SECRET="your-32-character-secret-key"
+   
+   # OCR 服务 (可选，接入真实 OCR 时使用)
+   PADDLEOCR_DOC_PARSING_API_URL="https://your-api-url/layout-parsing"
+   PADDLEOCR_ACCESS_TOKEN="your-token"
+   ```
+
+4. **初始化数据库**
+   ```bash
+   npx prisma migrate dev --name init
+   npx prisma db seed
+   ```
+
+5. **启动开发服务器**
+   ```bash
+   pnpm dev
+   ```
+   打开浏览器访问 [http://localhost:3000](http://localhost:3000)。
+
+---
+
+## 📂 目录结构
+
+```text
+├── prisma/               # 数据库 Schema 与迁移脚本
+├── public/               # 静态资源文件
+├── src/
+│   ├── app/              # Next.js 页面与 API 路由
+│   ├── components/       # UI 组件与业务组件
+│   ├── hooks/            # 自定义 React Hooks
+│   ├── lib/              # 通用工具类与单例 (Prisma, API Client)
+│   ├── server/           # 核心业务服务逻辑 (Auth, Chat, Prompt)
+│   ├── store/            # Zustand 状态库
+│   └── types/            # TypeScript 类型定义
+└── .env                  # 环境变量配置 (不进入 Git)
 ```
 
-如果你的系统没有全局 `pnpm`，可以先安装 pnpm，或直接使用本机可用的 `pnpm.CMD`。
+---
 
-### 2. 启动开发服务
+## 🤝 协作开发
 
-```bash
-pnpm dev
-```
+本项目采用模块化设计，方便多角色协同：
+- **模型接入者**: 关注 `src/app/api/chat/route.ts`，利用 `src/server/chat/prompt-service.ts` 获取预存指令。
+- **UI 开发者**: 关注 `src/components/`，使用现有的 shadcn/ui 组件库进行扩展。
+- **数据管理者**: 运行 `npx prisma studio` 即可可视化管理本地数据库。
 
-默认打开：
+---
 
-- [http://127.0.0.1:3000](http://127.0.0.1:3000)
+## 🗺️ 路线图 (Roadmap)
 
-### 3. 生产构建
+- [x] 用户系统与 Session 持久化
+- [x] 会话管理 (CRUD) 闭环
+- [x] 账号数据彻底隔离
+- [x] 动态 Prompt 预存系统
+- [ ] 接入 DeepSeek/OpenAI 真实流式输出
+- [ ] 接入云端 PostgreSQL 数据库
+- [ ] 支持多轮对话的上下文窗口自动裁剪
 
-```bash
-pnpm build
-pnpm start
-```
+---
 
-### 4. 代码检查
+## 📄 开源协议
 
-```bash
-pnpm lint
-```
-
-## 页面怎么用
-
-### 首页 `/`
-
-- 顶部是产品导航和进入工作台按钮
-- 中间 Hero 是更像真实 AI 产品的首屏
-- 下方展示 capability cards、API 预留和能力跑马灯
-
-### 聊天页 `/chat`
-
-- 左侧是会话栏
-- 中间是聊天区
-- 右侧是证据面板
-- 底部输入框支持回车发送，Shift+Enter 换行
-
-### 上传
-
-- 点击左下或输入区的上传按钮
-- 支持 PNG / JPG / WEBP / GIF
-- 上传后会在聊天区和证据面板显示预览
-
-### 模式
-
-- `默认`：轻量回答
-- `/explain`：更结构化
-- `/think`：更长的推理与更慢的流式节奏
-
-### 会话管理
-
-每个会话支持：
-
-- 重命名
-- 置顶 / 取消置顶
-- 复制
-- 清空消息
-- 删除
-
-会话和偏好会保存在浏览器 `localStorage` 里。
-
-## Mock API 说明
-
-### `POST /api/chat`
-
-请求体示例：
-
-```ts
-{
-  sessionId: string;
-  message: string;
-  mode: "default" | "explain" | "think";
-  model: string;
-  attachmentIds: string[];
-}
-```
-
-返回：
-
-- `message`
-- `ocrBlocks`
-
-### `POST /api/upload`
-
-- 接收 `FormData`
-- 字段名：`files`
-- 返回 mock 文件列表和 OCR 片段
-
-### `GET /api/history`
-
-- 返回初始会话列表
-
-## 调试指南
-
-### 1. 页面空白或样式异常
-
-- 先跑 `pnpm build`
-- 再确认 `src/app/layout.tsx` 里的字体和全局样式是否正常加载
-- 若浏览器已有旧缓存，清掉 localStorage 再刷新
-
-清缓存方式：
-
-```js
-localStorage.removeItem("mllm-studio-chat");
-location.reload();
-```
-
-也可以在侧边栏 `设置` 里执行清缓存。
-
-### 2. 上传不生效
-
-检查：
-
-- 文件类型是否是 PNG / JPG / WEBP / GIF
-- 是否真的点到了上传按钮
-- 浏览器控制台是否有 `File type` 或 `FormData` 报错
-
-### 3. 会话状态怪怪的
-
-原因通常是浏览器里存了旧的会话快照。
-
-处理：
-
-- 侧边栏 `设置` -> `清空本地缓存`
-- 或执行 `localStorage.removeItem("mllm-studio-chat")`
-
-### 4. 发送后没有流式效果
-
-确认：
-
-- `POST /api/chat` 是否正常返回
-- `src/lib/mock-chat.ts` 是否还在生成流式帧
-- 右侧证据面板是否被遮挡
-
-### 5. 代码块 / LaTeX 渲染异常
-
-检查这几个依赖是否都在：
-
-- `react-markdown`
-- `remark-gfm`
-- `rehype-highlight`
-- `rehype-katex`
-- `katex`
-
-同时确认 `src/app/layout.tsx` 已经引入 `katex/dist/katex.min.css`。
-
-### 6. 端口被占用
-
-换端口启动：
-
-```bash
-pnpm dev -- --port 3001
-```
-
-## 关键文件
-
-- `src/app/page.tsx`：首页
-- `src/app/chat/page.tsx`：聊天页入口
-- `src/components/chat/chat-workspace.tsx`：主工作台布局
-- `src/components/chat/chat-sidebar.tsx`：会话管理
-- `src/components/chat/chat-composer.tsx`：输入与发送
-- `src/components/chat/chat-message.tsx`：消息气泡与 markdown
-- `src/lib/mock-chat.ts`：mock 回答和流式帧
-- `src/store/chat-store.ts`：会话状态
-- `src/app/api/chat/route.ts`：mock chat 接口
-
-## 后续接真实后端
-
-后面把 mock 接口换成真实模型服务时，优先改这两个地方：
-
-1. `src/lib/api.ts`
-2. `src/app/api/chat/route.ts`
-
-如果你要接 FastAPI / vLLM，只需要保持接口签名不变，前端大部分代码不用动。
-
-
+本项目基于 [MIT License](LICENSE) 协议开源。
 

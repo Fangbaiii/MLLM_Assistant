@@ -219,6 +219,7 @@ export default function Home() {
           <span>Vision QA</span>
           <span>Document OCR</span>
           <span>Premium Chat</span>
+          <Link href="/login" className="hover:text-foreground transition-colors">登录</Link>
         </div>
         <Link href="/chat" className={cn(buttonVariants({ size: "lg" }), "rounded-full")}>
           进入工作台

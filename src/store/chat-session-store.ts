@@ -30,6 +30,7 @@ type ChatSessionStore = {
   updateMessageContent: (id: string, content: string, isStreaming?: boolean) => void;
   patchMessage: (id: string, patch: Partial<ChatMessage>) => void;
   updateSession: (id: string, patch: SessionMetaPatch) => void;
+  setSessions: (sessions: ChatSession[]) => void;
   resetSessions: () => void;
 };
 
@@ -206,6 +207,11 @@ export const useChatSessionStore = create<ChatSessionStore>()(
             session.id === id ? touchSession({ ...session, ...patch }) : session,
           ),
         })),
+      setSessions: (sessions) =>
+        set((state) => ({
+          sessions: sessions.length > 0 ? sessions : state.sessions,
+          currentSessionId: sessions[0]?.id ?? state.currentSessionId,
+        })),
       resetSessions: () => set(resetSessionState()),
     }),
     {
@@ -213,7 +219,7 @@ export const useChatSessionStore = create<ChatSessionStore>()(
       version: 1,
       storage: createJSONStorage(() => localStorage),
       partialize: (state): PersistedSessionState => ({
-        sessions: serializeSessions(state.sessions),
+        sessions: [], // 不持久化会话列表，强制从后端拉取
         currentSessionId: state.currentSessionId,
         mode: state.mode,
       }),

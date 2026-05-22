@@ -11,6 +11,16 @@ export async function fetchHistory() {
   return response.data;
 }
 
+export async function updateHistorySession(id: string, patch: { title?: string; pinned?: boolean }) {
+  const response = await apiClient.patch(`/history/${id}`, patch);
+  return response.data;
+}
+
+export async function deleteHistorySession(id: string) {
+  const response = await apiClient.delete(`/history/${id}`);
+  return response.data;
+}
+
 export async function uploadFiles(
   files: Array<{
     assetId: string;

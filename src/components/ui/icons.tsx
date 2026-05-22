@@ -19,6 +19,7 @@ import {
   ImagePlus as ImagePlusBase,
   Layers3 as Layers3Base,
   Loader2 as Loader2Base,
+  LogOut as LogOutBase,
   Menu as MenuBase,
   MessageSquareText as MessageSquareTextBase,
   Moon as MoonBase,
@@ -73,6 +74,7 @@ export const ImageIcon = withHydrationSafeSvg(ImageIconBase, "ImageIcon");
 export const ImagePlus = withHydrationSafeSvg(ImagePlusBase, "ImagePlus");
 export const Layers3 = withHydrationSafeSvg(Layers3Base, "Layers3");
 export const Loader2 = withHydrationSafeSvg(Loader2Base, "Loader2");
+export const LogOut = withHydrationSafeSvg(LogOutBase, "LogOut");
 export const Menu = withHydrationSafeSvg(MenuBase, "Menu");
 export const MessageSquareText = withHydrationSafeSvg(MessageSquareTextBase, "MessageSquareText");
 export const Moon = withHydrationSafeSvg(MoonBase, "Moon");

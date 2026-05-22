@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useEffect, type ReactNode } from "react";
 import {
   Check,
   Clock3,
   Copy,
+  LogOut,
   Moon,
   MoreHorizontal,
   PencilLine,
@@ -19,6 +20,7 @@ import {
   SunDim,
   Trash2,
 } from "@/components/ui/icons";
+import { useSession, signOut } from "next-auth/react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { modeLabel } from "@/lib/chat-commands";
+import { deleteHistorySession, fetchHistory, updateHistorySession } from "@/lib/api";
 import { clearAppCache } from "@/lib/app-cache";
 import { cn } from "@/lib/utils";
 import { useRelativeTime } from "@/hooks/use-relative-time";
@@ -207,6 +210,7 @@ function SessionCard({
 }
 
 export function ChatSidebar({ className }: { className?: string }) {
+  const { data: session } = useSession();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -222,7 +226,18 @@ export function ChatSidebar({ className }: { className?: string }) {
   const deleteSession = useChatSessionStore((state) => state.deleteSession);
   const togglePinSession = useChatSessionStore((state) => state.togglePinSession);
   const clearSessionMessages = useChatSessionStore((state) => state.clearSessionMessages);
+  const setSessions = useChatSessionStore((state) => state.setSessions);
   const searchQuery = useWorkbenchStore((state) => state.searchQuery);
+
+  useEffect(() => {
+    if (session?.user) {
+      fetchHistory().then((data) => {
+        if (data.sessions) {
+          setSessions(data.sessions);
+        }
+      });
+    }
+  }, [session, setSessions]);
   const darkMode = useWorkbenchStore((state) => state.darkMode);
   const reducedMotion = useWorkbenchStore((state) => state.reducedMotion);
   const demoPreference = useWorkbenchStore((state) => state.demoPreference);
@@ -259,11 +274,28 @@ export function ChatSidebar({ className }: { className?: string }) {
     setDraftTitle(session.title);
   };
 
-  const submitRename = () => {
+  const submitRename = async () => {
     if (renamingId) {
-      renameSession(renamingId, draftTitle);
+      const targetTitle = draftTitle.trim();
+      if (targetTitle) {
+        try {
+          await updateHistorySession(renamingId, { title: targetTitle });
+          renameSession(renamingId, targetTitle);
+        } catch (error) {
+          console.error("重命名失败:", error);
+        }
+      }
     }
     setRenamingId(null);
+  };
+
+  const handleTogglePin = async (id: string, currentlyPinned: boolean) => {
+    try {
+      await updateHistorySession(id, { pinned: !currentlyPinned });
+      togglePinSession(id);
+    } catch (error) {
+      console.error("操作失败:", error);
+    }
   };
 
   const setPreference = (preference: DemoPreference) => {
@@ -287,10 +319,15 @@ export function ChatSidebar({ className }: { className?: string }) {
     }
   };
 
-  const removeSession = (session: ChatSession) => {
-    deleteSession(session.id);
-    if (session.id === currentSessionId) {
-      clearEvidenceWorkspace();
+  const removeSession = async (session: ChatSession) => {
+    try {
+      await deleteHistorySession(session.id);
+      deleteSession(session.id);
+      if (session.id === currentSessionId) {
+        clearEvidenceWorkspace();
+      }
+    } catch (error) {
+      console.error("删除失败:", error);
     }
     setDeletingSession(null);
   };
@@ -351,7 +388,7 @@ export function ChatSidebar({ className }: { className?: string }) {
                   active={session.id === currentSessionId}
                   onSelect={() => openSession(session.id)}
                   onRename={() => openRename(session)}
-                  onTogglePin={() => togglePinSession(session.id)}
+                  onTogglePin={() => handleTogglePin(session.id, !!session.pinned)}
                   onDuplicate={() => duplicateSession(session.id)}
                   onClear={() => clearSession(session.id)}
                   onDelete={() => setDeletingSession(session)}
@@ -371,7 +408,7 @@ export function ChatSidebar({ className }: { className?: string }) {
                 active={session.id === currentSessionId}
                 onSelect={() => openSession(session.id)}
                 onRename={() => openRename(session)}
-                onTogglePin={() => togglePinSession(session.id)}
+                onTogglePin={() => handleTogglePin(session.id, !!session.pinned)}
                 onDuplicate={() => duplicateSession(session.id)}
                 onClear={() => clearSession(session.id)}
                 onDelete={() => setDeletingSession(session)}
@@ -399,12 +436,23 @@ export function ChatSidebar({ className }: { className?: string }) {
 
         <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-background/60 p-3">
           <Avatar className="size-8">
-            <AvatarFallback className="bg-primary text-primary-foreground">AI</AvatarFallback>
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              {session?.user?.name?.[0] || "U"}
+            </AvatarFallback>
           </Avatar>
-          <div className="min-w-0">
-            <p className="truncate text-sm">本地工作台</p>
-            <p className="text-xs text-muted-foreground">结构清晰、状态分层、问题更好定位</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{session?.user?.name || "本地用户"}</p>
+            <p className="truncate text-xs text-muted-foreground">{session?.user?.email || "未登录"}</p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => signOut()}
+            title="退出登录"
+          >
+            <LogOut className="size-4" />
+          </Button>
         </div>
       </div>
 

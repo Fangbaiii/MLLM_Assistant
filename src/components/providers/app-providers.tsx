@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useWorkbenchStore } from "@/store/workbench-store";
+import { SessionProvider, useSession } from "next-auth/react";
+import { useChatSessionStore } from "@/store/chat-session-store";
 
 function ThemeBridge() {
   const darkMode = useWorkbenchStore((state) => state.darkMode);
@@ -21,6 +23,20 @@ function ThemeBridge() {
   return null;
 }
 
+function AuthStateObserver({ children }: { children: ReactNode }) {
+  const { status } = useSession();
+  const resetSessions = useChatSessionStore((state) => state.resetSessions);
+
+  useEffect(() => {
+    // 当退出登录或身份失效时，立即清空内存中的聊天记录
+    if (status === "unauthenticated") {
+      resetSessions();
+    }
+  }, [status, resetSessions]);
+
+  return <>{children}</>;
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -36,10 +52,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delay={120}>
-        <ThemeBridge />
-        {children}
-      </TooltipProvider>
+      <SessionProvider>
+        <AuthStateObserver>
+          <TooltipProvider delay={120}>
+            <ThemeBridge />
+            {children}
+          </TooltipProvider>
+        </AuthStateObserver>
+      </SessionProvider>
     </QueryClientProvider>
   );
 }

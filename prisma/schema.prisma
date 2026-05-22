@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String?
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sessions     ChatSession[]
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  title     String
+  model     String        @default("gpt-4o")
+  pinned    Boolean       @default(false)
+  summary   String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+  }
+
+  model ChatMessage {
+  id        String      @id @default(cuid())
+  role      String // "user", "assistant", "system"
+  content   String
+  mode      String? // "default", "explain", "think"
+  reasoning String? // 推理过程
+  createdAt DateTime    @default(now())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  }
+
+  model SystemPrompt {
+  id        String   @id @default(cuid())
+  mode      String   @unique // "default", "explain", "think"
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  }
+
