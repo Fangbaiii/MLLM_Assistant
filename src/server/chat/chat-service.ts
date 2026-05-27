@@ -1,5 +1,32 @@
 import { prisma } from "@/lib/prisma";
 
+export type ContextMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  mode?: string | null;
+  createdAt: string;
+};
+
+const DEFAULT_CONTEXT_WINDOW_CHARS = 18_000;
+const DEFAULT_CONTEXT_MAX_MESSAGES = 16;
+
+function parsePositiveInt(raw: string | undefined, fallback: number) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return Math.floor(value);
+}
+
+function normalizeMessageContent(content: string) {
+  return content.replace(/\s+/g, " ").trim();
+}
+
+function estimateMessageCost(content: string) {
+  return normalizeMessageContent(content).length + 32;
+}
+
 export async function getUserChatHistory(userId: string) {
   try {
     console.log(`[ChatService] Fetching history for user: ${userId}`);
@@ -47,6 +74,13 @@ export async function createChatSession(userId: string, title: string, sessionId
   });
 }
 
+export async function updateChatSessionModel(sessionId: string, userId: string, model: string) {
+  return prisma.chatSession.update({
+    where: { id: sessionId, userId },
+    data: { model },
+  });
+}
+
 export async function renameChatSession(sessionId: string, userId: string, title: string) {
   console.log(`[ChatService] Renaming session: ${sessionId} to: ${title}`);
   return prisma.chatSession.update({
@@ -86,4 +120,74 @@ export async function saveChatMessage(sessionId: string, data: {
       reasoning: data.reasoning,
     },
   });
+}
+
+export async function getTrimmedConversationContext(params: {
+  sessionId: string;
+  userId: string;
+  excludeMessageIds?: string[];
+}) {
+  const maxWindowChars = parsePositiveInt(
+    process.env.MLLM_CONTEXT_WINDOW_CHARS,
+    DEFAULT_CONTEXT_WINDOW_CHARS,
+  );
+  const maxMessages = parsePositiveInt(
+    process.env.MLLM_CONTEXT_MAX_MESSAGES,
+    DEFAULT_CONTEXT_MAX_MESSAGES,
+  );
+  const excludeMessageIds = new Set((params.excludeMessageIds ?? []).filter(Boolean));
+
+  const messages = await prisma.chatMessage.findMany({
+    where: {
+      sessionId: params.sessionId,
+      session: {
+        userId: params.userId,
+      },
+    },
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      mode: true,
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  let budgetUsed = 0;
+  const selected: ContextMessage[] = [];
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (excludeMessageIds.has(message.id)) {
+      continue;
+    }
+    if (message.role !== "user" && message.role !== "assistant") {
+      continue;
+    }
+    if (!message.content.trim()) {
+      continue;
+    }
+    if (selected.length >= maxMessages) {
+      break;
+    }
+
+    const cost = estimateMessageCost(message.content);
+    if (selected.length > 0 && budgetUsed + cost > maxWindowChars) {
+      break;
+    }
+
+    budgetUsed += cost;
+    selected.push({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      mode: message.mode,
+      createdAt: message.createdAt.toISOString(),
+    });
+  }
+
+  return selected.reverse();
 }

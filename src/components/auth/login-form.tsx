@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -13,12 +13,7 @@ function LoginFormInner() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  useEffect(() => {
-    if (searchParams.get("registered")) {
-      setSuccess("注册成功，请使用新账号登录");
-    }
-  }, [searchParams]);
+  const visibleSuccess = success || (searchParams.get("registered") ? "注册成功，请使用新账号登录" : "");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,9 +79,9 @@ function LoginFormInner() {
           </div>
         )}
 
-        {success && (
+        {visibleSuccess && (
           <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-100 rounded-lg">
-            {success}
+            {visibleSuccess}
           </div>
         )}
 

@@ -29,8 +29,10 @@ export function RegisterForm() {
         // 注册成功后跳转到登录页
         router.push("/login?registered=true");
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || "注册失败，请稍后再试");
+    } catch (err: unknown) {
+      const message =
+        axios.isAxiosError<{ error?: string }>(err) ? err.response?.data?.error : null;
+      setError(message || "注册失败，请稍后再试");
     } finally {
       setLoading(false);
     }

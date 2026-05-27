@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { processUploadedFiles } from "@/server/upload/upload-service";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   const formData = await request.formData();
   const files = formData.getAll("files").filter((item): item is File => item instanceof File);
