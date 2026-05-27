@@ -1,5 +1,11 @@
+import { execFile as execFileCallback } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 import { callPaddleDocumentParsingApi, getFileType } from "@/server/upload/paddle-client";
 import type { PaddleLayoutResult } from "@/server/upload/types";
+import { persistUploadArtifact } from "@/server/upload/upload-artifact-service";
 import type {
   EvidenceBlock,
   EvidenceBlockKind,
@@ -13,6 +19,24 @@ const OCR_HINT_PATTERN =
   /(doc|scan|page|screen|slide|ppt|pdf|invoice|report|note|paper|screenshot|capture|snip|home|chat|desktop|ui|dashboard|form|sheet|system|design|wechat|qq|feishu|dingtalk|notion|figma)/;
 const VISION_HINT_PATTERN =
   /(photo|camera|landscape|scenery|vacation|travel|portrait|selfie|nature|mountain|beach|sunset|pet|food)/;
+const execFile = promisify(execFileCallback);
+
+function isLikelyPlaceholder(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return true;
+  return (
+    normalized.includes("your-token") ||
+    normalized.includes("your-api-url") ||
+    normalized.includes("example.com") ||
+    normalized.includes("replace-with")
+  );
+}
+
+function isPaddleConfigured() {
+  const url = process.env.PADDLEOCR_DOC_PARSING_API_URL ?? "";
+  const token = process.env.PADDLEOCR_ACCESS_TOKEN ?? "";
+  return !isLikelyPlaceholder(url) && !isLikelyPlaceholder(token);
+}
 
 function stableUploadId(name: string, index: number) {
   const safeName = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -210,6 +234,24 @@ function buildVisionDocument(file: File, assetId: string): EvidenceDocument {
   };
 }
 
+async function convertPdfFirstPageToPng(file: File) {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "mllm-pdf-"));
+  const pdfPath = path.join(tempDir, "input.pdf");
+  const outputPrefix = path.join(tempDir, "page-1");
+  const outputPath = `${outputPrefix}.png`;
+
+  try {
+    await writeFile(pdfPath, Buffer.from(await file.arrayBuffer()));
+    await execFile("pdftoppm", ["-f", "1", "-singlefile", "-png", pdfPath, outputPrefix], {
+      timeout: 30_000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    return await readFile(outputPath);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 function mapLayoutResultsToBlocks(file: File, uploadIndex: number, pages: PaddleLayoutResult[], assetId: string) {
   const displayName = file.name.replace(/\.[^.]+$/, "") || `文件 ${uploadIndex + 1}`;
 
@@ -239,6 +281,10 @@ async function shouldRouteToOcr(file: File) {
     return true;
   }
 
+  if (!isPaddleConfigured()) {
+    return false;
+  }
+
   const lowerName = file.name.toLowerCase();
   if (OCR_HINT_PATTERN.test(lowerName)) {
     return true;
@@ -261,7 +307,9 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
     const routeToOcr = await shouldRouteToOcr(file);
 
     if (!routeToOcr) {
-      documents.push(buildVisionDocument(file, assetId));
+      const document = buildVisionDocument(file, assetId);
+      documents.push(document);
+      await persistUploadArtifact(file, assetId, "vision", document);
       mappedFiles.push({
         id: assetId,
         name: file.name,
@@ -273,17 +321,82 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
       continue;
     }
 
-    const pages = await callPaddleDocumentParsingApi(file);
-    allBlocks.push(...mapLayoutResultsToBlocks(file, index, pages, assetId));
-    documents.push(buildEvidenceDocument(file, index, pages, assetId));
-    mappedFiles.push({
-      id: assetId,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      page: file.type === "application/pdf" ? `PDF ${index + 1}` : `图片 ${index + 1}`,
-      routing: "ocr",
-    });
+    try {
+      const pages = await callPaddleDocumentParsingApi(file);
+      const document = buildEvidenceDocument(file, index, pages, assetId);
+      allBlocks.push(...mapLayoutResultsToBlocks(file, index, pages, assetId));
+      documents.push(document);
+      await persistUploadArtifact(file, assetId, "ocr", document);
+      mappedFiles.push({
+        id: assetId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        page: file.type === "application/pdf" ? `PDF ${index + 1}` : `图片 ${index + 1}`,
+        routing: "ocr",
+      });
+    } catch (error) {
+      // OCR 服务不可用时，图片自动降级到 Vision 路由，避免上传链路整体失败。
+      if (file.type.startsWith("image/")) {
+        const document = buildVisionDocument(file, assetId);
+        documents.push(document);
+        await persistUploadArtifact(file, assetId, "vision", document);
+        mappedFiles.push({
+          id: assetId,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          page: `图片 ${index + 1}`,
+          routing: "vision",
+        });
+        continue;
+      }
+
+      // PDF 在 OCR 不可用时，回退提取第一页为 PNG 走 Vision，多模态模型仍可看到页面内容。
+      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+        const firstPagePng = await convertPdfFirstPageToPng(file);
+        const fallbackImage = new File([firstPagePng], `${file.name.replace(/\.pdf$/i, "") || "document"}-page-1.png`, {
+          type: "image/png",
+        });
+        const document: EvidenceDocument = {
+          ...buildVisionDocument(file, assetId),
+          summary: "OCR 服务不可用，已自动将 PDF 首页转为图片并走视觉理解。",
+          pages: [
+            {
+              id: `${assetId}-page-1`,
+              pageNumber: 1,
+              title: `${file.name} - 第 1 页（视觉回退）`,
+              markdown:
+                "该 PDF 未完成 OCR，系统已将首页转为图片并发送到视觉模型。若需全文结构化解析，请配置可用的 PaddleOCR 服务。",
+              confidence: 0,
+              blocks: [
+                {
+                  id: `${assetId}-vision-fallback`,
+                  kind: "figure",
+                  title: "PDF 首页视觉回退",
+                  content: "已转换首页图片并提交到视觉模型。",
+                  confidence: 0,
+                },
+              ],
+            },
+          ],
+        };
+
+        documents.push(document);
+        await persistUploadArtifact(fallbackImage, assetId, "vision", document);
+        mappedFiles.push({
+          id: assetId,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          page: `PDF ${index + 1}`,
+          routing: "vision",
+        });
+        continue;
+      }
+
+      throw error;
+    }
   }
 
   return {

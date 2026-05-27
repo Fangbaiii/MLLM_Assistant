@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRef, useState } from "react";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
@@ -9,9 +8,8 @@ import { Button } from "@/components/ui/button";
 import { ImagePlus, PanelRightOpen, SendHorizontal } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { sendChat } from "@/lib/api";
+import { streamChat } from "@/lib/api";
 import { commandOptions, parseLeadingCommand } from "@/lib/chat-commands";
-import { buildStreamFrames } from "@/lib/chat-stream";
 import { createId } from "@/lib/id";
 import { cn } from "@/lib/utils";
 import { defaultEvidence } from "@/mocks/data";
@@ -51,25 +49,6 @@ export function ChatComposer() {
   const composerHeight = useWorkbenchStore((state) => state.composerHeight);
   const setComposerHeight = useWorkbenchStore((state) => state.setComposerHeight);
   const toggleRightPanel = useWorkbenchStore((state) => state.toggleRightPanel);
-
-  const chatMutation = useMutation({
-    mutationFn: sendChat,
-  });
-
-  const streamAnswer = async (messageId: string, content: string) => {
-    let current = "";
-    const frames = buildStreamFrames(content);
-
-    await new Promise((resolve) => window.setTimeout(resolve, 180));
-
-    for (const frame of frames) {
-      current += frame.text;
-      updateMessageContent(messageId, current, true);
-      await new Promise((resolve) => window.setTimeout(resolve, frame.delay));
-    }
-
-    updateMessageContent(messageId, current, false);
-  };
 
   const handleChange = (nextValue: string) => {
     if (!nextValue) {
@@ -137,7 +116,7 @@ export function ChatComposer() {
 
   const submit = async () => {
     const body = value.trim();
-    if (!body || chatMutation.isPending || isStreaming) return;
+    if (!body || isStreaming) return;
 
     const requestMode = mode;
     const attachmentIds = assets.map((asset) => asset.id);
@@ -169,45 +148,74 @@ export function ChatComposer() {
     setIsStreaming(true);
     setThinking(true);
     setUploadOpen(false);
-    clearUploadedAssets();
     addMessage(userMessage);
     addMessage(assistantPlaceholder);
 
     try {
-      const response = await chatMutation.mutateAsync({
-        sessionId: currentSessionId,
-        message: body,
-        mode: requestMode,
-        attachmentIds,
-      });
+      let mergedContent = "";
+      let streamError = "";
+      let thinkingFinished = false;
 
-      if (attachmentIds.length === 0) {
-        setOcrBlocks(response.ocrBlocks);
-        setEvidenceDocuments([]);
+      await streamChat(
+        {
+          sessionId: currentSessionId,
+          message: body,
+          mode: requestMode,
+          attachmentIds,
+        },
+        {
+          onToken: (token) => {
+            if (!thinkingFinished) {
+              setThinking(false);
+              thinkingFinished = true;
+            }
+            mergedContent += token;
+            updateMessageContent(assistantId, mergedContent, true);
+          },
+          onMeta: (meta) => {
+            if (attachmentIds.length === 0) {
+              setOcrBlocks(meta.ocrBlocks ?? []);
+              setEvidenceDocuments([]);
+            }
+            if (meta.model) {
+              updateSession(currentSessionId, { model: meta.model });
+            }
+            patchMessage(assistantId, {
+              evidence: meta.evidence,
+              reasoning: meta.reasoning,
+              mode: meta.mode ?? requestMode,
+            });
+          },
+          onDone: () => {
+            if (!thinkingFinished) {
+              setThinking(false);
+              thinkingFinished = true;
+            }
+          },
+          onError: (message) => {
+            streamError = message;
+          },
+        },
+      );
+
+      if (streamError) {
+        throw new Error(streamError);
       }
 
-      if (response.model) {
-        updateSession(currentSessionId, { model: response.model });
-      }
-
-      patchMessage(assistantId, {
-        evidence: response.message.evidence,
-        reasoning: response.message.reasoning,
-        mode: response.message.mode ?? requestMode,
-      });
-
+      updateMessageContent(assistantId, mergedContent, false);
+      clearUploadedAssets();
+      setUploadOpen(false);
+    } catch (error) {
       setThinking(false);
-      await streamAnswer(assistantId, response.message.content);
-    } catch {
-      setThinking(false);
-      updateMessageContent(assistantId, "抱歉，服务暂时没有响应，请稍后再试。", false);
+      const message = error instanceof Error ? error.message : "抱歉，服务暂时没有响应，请稍后再试。";
+      updateMessageContent(assistantId, message, false);
     } finally {
       setIsStreaming(false);
     }
   };
 
   return (
-    <div className="shrink-0 border-t border-border bg-background/86 backdrop-blur-2xl" style={{ height: composerHeight + dividerHeight }}>
+    <div className="relative shrink-0 border-t border-border bg-background/86 backdrop-blur-2xl" style={{ height: composerHeight + dividerHeight }}>
       <PanelDivider
         orientation="horizontal"
         label="调整回答框高度"
@@ -215,20 +223,22 @@ export function ChatComposer() {
         onPointerDown={beginResize}
       />
 
-      <div className="flex h-[calc(100%-8px)] flex-col gap-3 overflow-hidden px-4 py-4 sm:px-8">
-        <AnimatePresence initial={false}>
-          {uploadOpen ? (
-            <motion.div
-              initial={{ opacity: 0, y: 12, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: "auto" }}
-              exit={{ opacity: 0, y: 12, height: 0 }}
-              className="mx-auto w-full max-w-4xl overflow-hidden"
-            >
-              <UploadDropzone />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+      <AnimatePresence initial={false}>
+        {uploadOpen ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="pointer-events-none absolute bottom-[calc(100%+10px)] left-0 right-0 z-20 px-4 sm:px-8"
+          >
+            <div className="pointer-events-auto mx-auto max-h-[42vh] w-full max-w-4xl overflow-y-auto">
+              <UploadDropzone compact />
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
+      <div className="flex h-[calc(100%-8px)] flex-col gap-3 overflow-hidden px-4 py-4 sm:px-8">
         <div className="mx-auto flex h-full w-full max-w-4xl min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card/80 p-2 shadow-[0_22px_80px_rgba(0,0,0,0.20)] backdrop-blur-2xl">
           <div className="flex flex-wrap items-center gap-2 px-3 pb-2 pt-2">
             <span className="text-[11px] font-medium tracking-[0.16em] text-muted-foreground">回答模式</span>
@@ -319,10 +329,10 @@ export function ChatComposer() {
               <Button
                 type="button"
                 className="h-10 rounded-lg px-4"
-                disabled={!value.trim() || chatMutation.isPending || isStreaming}
+                disabled={!value.trim() || isStreaming}
                 onClick={() => void submit()}
               >
-                {chatMutation.isPending || isStreaming ? "生成中" : "发送"}
+                {isStreaming ? "生成中" : "发送"}
                 <SendHorizontal className="size-4" />
               </Button>
             </div>

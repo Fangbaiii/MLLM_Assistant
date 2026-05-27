@@ -80,6 +80,7 @@ export async function callPaddleDocumentParsingApi(file: File): Promise<PaddleLa
       visualize: false,
       useDocUnwarping: false,
       useDocOrientationClassify: false,
+      useChartRecognition: false,
     }),
     signal: AbortSignal.timeout(getTimeoutMs()),
   });
