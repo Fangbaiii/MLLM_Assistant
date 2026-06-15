@@ -34,7 +34,7 @@ function LoginFormInner() {
         router.push("/chat");
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       setError("登录时发生意外错误");
     } finally {
       setLoading(false);

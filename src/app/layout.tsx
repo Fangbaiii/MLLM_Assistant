@@ -1,18 +1,6 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Geist_Mono } from "next/font/google";
 import { AppProviders } from "@/components/providers/app-providers";
 import "./globals.css";
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const cormorant = Cormorant_Garamond({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
 
 export const metadata: Metadata = {
   title: "MLLM Studio | 多模态智能工作台",
@@ -28,7 +16,7 @@ export default function RootLayout({
     <html
       lang="zh-CN"
       data-theme="dark"
-      className={`${geistMono.variable} ${cormorant.variable} dark h-full antialiased`}
+      className="dark h-full antialiased"
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">

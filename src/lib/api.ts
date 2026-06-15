@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { ChatRequest, ChatResponse, UploadResponse } from "@/types/app";
+import type { ChatRequest, ChatResponse, EvidenceDocument, OcrBlock, UploadResponse, UploadedAsset } from "@/types/app";
 
 export const apiClient = axios.create({
   baseURL: "/api",
@@ -13,6 +13,16 @@ export async function fetchHistory() {
 
 export async function updateHistorySession(id: string, patch: { title?: string; pinned?: boolean }) {
   const response = await apiClient.patch(`/history/${id}`, patch);
+  return response.data;
+}
+
+export async function clearHistorySession(id: string) {
+  const response = await apiClient.patch(`/history/${id}`, { clear: true });
+  return response.data;
+}
+
+export async function duplicateHistorySession(id: string) {
+  const response = await apiClient.post(`/history/${id}`);
   return response.data;
 }
 
@@ -32,7 +42,23 @@ export async function uploadFiles(
     formData.append("files", file);
     formData.append("assetIds", assetId);
   });
-  const response = await apiClient.post<UploadResponse>("/upload", formData);
+  const response = await apiClient.post<UploadResponse>("/upload", formData, {
+    timeout: 180_000,
+  });
+  return response.data;
+}
+
+export async function deleteUploadedAsset(id: string) {
+  const response = await apiClient.delete(`/uploads/${encodeURIComponent(id)}`);
+  return response.data;
+}
+
+export async function loadUploadContext(assetIds: string[]): Promise<{
+  assets: UploadedAsset[];
+  ocrBlocks: OcrBlock[];
+  documents: EvidenceDocument[];
+}> {
+  const response = await apiClient.post("/uploads/context", { assetIds });
   return response.data;
 }
 
@@ -56,6 +82,10 @@ type StreamCallbacks = {
   onError: (message: string) => void;
 };
 
+type StreamOptions = {
+  signal?: AbortSignal;
+};
+
 function parseSseBlock(block: string) {
   const lines = block.split("\n");
   let event = "message";
@@ -77,7 +107,11 @@ function parseSseBlock(block: string) {
   return { event, data: dataLines.join("\n") };
 }
 
-export async function streamChat(request: ChatRequest, callbacks: StreamCallbacks) {
+export async function streamChat(
+  request: ChatRequest,
+  callbacks: StreamCallbacks,
+  options: StreamOptions = {},
+) {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: {
@@ -85,6 +119,7 @@ export async function streamChat(request: ChatRequest, callbacks: StreamCallback
       Accept: "text/event-stream",
     },
     body: JSON.stringify(request),
+    signal: options.signal,
   });
 
   if (!response.ok) {

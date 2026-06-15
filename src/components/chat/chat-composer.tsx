@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { PanelDivider } from "@/components/workbench/panel-divider";
 import { Button } from "@/components/ui/button";
-import { ImagePlus, PanelRightOpen, SendHorizontal } from "@/components/ui/icons";
+import { ImagePlus, PanelRightOpen, SendHorizontal, Square } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { streamChat } from "@/lib/api";
@@ -33,6 +33,7 @@ export function ChatComposer() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
 
   const currentSessionId = useChatSessionStore((state) => state.currentSessionId);
   const mode = useChatSessionStore((state) => state.mode);
@@ -43,7 +44,6 @@ export function ChatComposer() {
   const updateMessageContent = useChatSessionStore((state) => state.updateMessageContent);
   const updateSession = useChatSessionStore((state) => state.updateSession);
   const assets = useEvidenceStore((state) => state.uploadedAssets);
-  const clearUploadedAssets = useEvidenceStore((state) => state.clearUploadedAssets);
   const setEvidenceDocuments = useEvidenceStore((state) => state.setEvidenceDocuments);
   const setOcrBlocks = useEvidenceStore((state) => state.setOcrBlocks);
   const composerHeight = useWorkbenchStore((state) => state.composerHeight);
@@ -150,6 +150,8 @@ export function ChatComposer() {
     setUploadOpen(false);
     addMessage(userMessage);
     addMessage(assistantPlaceholder);
+    const abortController = new AbortController();
+    streamAbortRef.current = abortController;
 
     try {
       let mergedContent = "";
@@ -196,6 +198,7 @@ export function ChatComposer() {
             streamError = message;
           },
         },
+        { signal: abortController.signal },
       );
 
       if (streamError) {
@@ -203,15 +206,30 @@ export function ChatComposer() {
       }
 
       updateMessageContent(assistantId, mergedContent, false);
-      clearUploadedAssets();
       setUploadOpen(false);
     } catch (error) {
       setThinking(false);
-      const message = error instanceof Error ? error.message : "抱歉，服务暂时没有响应，请稍后再试。";
-      updateMessageContent(assistantId, message, false);
+      if (abortController.signal.aborted) {
+        patchMessage(assistantId, {
+          isStreaming: false,
+          reasoning: "用户已停止本次生成。",
+        });
+        setUploadOpen(false);
+      } else {
+        const message = error instanceof Error ? error.message : "抱歉，服务暂时没有响应，请稍后再试。";
+        updateMessageContent(assistantId, message, false);
+      }
     } finally {
+      if (streamAbortRef.current === abortController) {
+        streamAbortRef.current = null;
+      }
       setIsStreaming(false);
     }
+  };
+
+  const stopStreaming = () => {
+    streamAbortRef.current?.abort();
+    setThinking(false);
   };
 
   return (
@@ -328,12 +346,13 @@ export function ChatComposer() {
               {assets.length ? <span className="text-xs text-muted-foreground">已附加 {assets.length} 个文件</span> : null}
               <Button
                 type="button"
-                className="h-10 rounded-lg px-4"
-                disabled={!value.trim() || isStreaming}
-                onClick={() => void submit()}
+                className={cn("h-10 rounded-lg px-4", isStreaming && "border-destructive/30 text-destructive")}
+                variant={isStreaming ? "outline" : "default"}
+                disabled={!isStreaming && !value.trim()}
+                onClick={isStreaming ? stopStreaming : () => void submit()}
               >
-                {isStreaming ? "生成中" : "发送"}
-                <SendHorizontal className="size-4" />
+                {isStreaming ? "停止生成" : "发送"}
+                {isStreaming ? <Square className="size-3.5 fill-current" /> : <SendHorizontal className="size-4" />}
               </Button>
             </div>
           </div>

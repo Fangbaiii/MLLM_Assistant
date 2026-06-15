@@ -93,6 +93,30 @@
    ```
    打开浏览器访问 [http://localhost:3000](http://localhost:3000)。
 
+### 本地 Qwen3-VL 部署
+
+如果你要切到本地 `Qwen3-VL-8B-Instruct` 服务，而不是云端 API，推荐使用仓库内置脚本：
+
+1. 准备本地 vLLM / 训练环境
+   ```bash
+   bash scripts/model/setup-vllm-env.sh
+   ```
+2. 下载模型
+   ```bash
+   bash scripts/model/download-qwen3-vl.sh
+   ```
+3. 启动本地 OpenAI-compatible 服务（自动按 `TP=1 -> 2 -> 4` 回退）
+   ```bash
+   MLLM_CUDA_VISIBLE_DEVICES=0,1,2,3 \
+   bash scripts/model/start-qwen3-vl.sh
+   ```
+4. 启动接入本地模型的 Web 开发环境
+   ```bash
+   bash scripts/model/start-local-web.sh
+   ```
+
+更完整的本地部署、公开数据采样、LoRA 训练与评测流程见 [docs/model-pipeline.md](docs/model-pipeline.md)。
+
 ### 通过 SSH 访问（远程服务器）
 本地终端先建立端口转发：
 ```bash
@@ -143,6 +167,9 @@ http://127.0.0.1:3000/
 - [x] 支持多轮对话的上下文窗口自动裁剪
 - [x] 接入 Qwen3-VL 云端多模态 API（OpenAI-compatible）
 - [x] 接入 PaddleOCR 同步文档解析（含图片/PDF 上传链路）
+- [x] 本地 Qwen3-VL OpenAI-compatible 服务脚本
+- [x] 公开多模态数据到 LoRA manifest 的转换流程
+- [ ] 中文/文档截图/自然图片方向的 LoRA 首轮正式训练
 
 ---
 

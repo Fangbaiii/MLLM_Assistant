@@ -5,7 +5,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { stripLeadingCommand } from "@/lib/chat-commands";
 import { createId } from "@/lib/id";
 import { resolveModelForMode } from "@/lib/model-routing";
-import { initialSessions } from "@/mocks/data";
 import type { ChatMessage, ChatMode, ChatSession } from "@/types/app";
 
 type PersistedSessionState = Pick<ChatSessionStore, "sessions" | "currentSessionId" | "mode">;
@@ -62,22 +61,15 @@ const touchSession = (session: ChatSession) => ({
 const ensureSessions = (sessions: ChatSession[], mode: ChatMode) =>
   sessions.length ? sessions : [makeBlankSession(mode)];
 
-const serializeSessions = (sessions: ChatSession[]): ChatSession[] =>
-  sessions.map((session) => ({
-    ...session,
-    messages: session.messages.map((message) => ({
-      ...message,
-      attachments: undefined,
-      isStreaming: false,
-    })),
-  }));
-
-const resetSessionState = () => ({
-  sessions: initialSessions,
-  currentSessionId: initialSessions[0]?.id ?? makeBlankSession().id,
-  mode: "default" as ChatMode,
-  isThinking: false,
-});
+const resetSessionState = () => {
+  const session = makeBlankSession();
+  return {
+    sessions: [session],
+    currentSessionId: session.id,
+    mode: "default" as ChatMode,
+    isThinking: false,
+  };
+};
 
 export const useChatSessionStore = create<ChatSessionStore>()(
   persist(
@@ -208,10 +200,14 @@ export const useChatSessionStore = create<ChatSessionStore>()(
           ),
         })),
       setSessions: (sessions) =>
-        set((state) => ({
-          sessions: sessions.length > 0 ? sessions : state.sessions,
-          currentSessionId: sessions[0]?.id ?? state.currentSessionId,
-        })),
+        set((state) => {
+          const nextSessions = ensureSessions(sessions, state.mode);
+          const hasCurrent = nextSessions.some((session) => session.id === state.currentSessionId);
+          return {
+            sessions: nextSessions,
+            currentSessionId: hasCurrent ? state.currentSessionId : nextSessions[0].id,
+          };
+        }),
       resetSessions: () => set(resetSessionState()),
     }),
     {

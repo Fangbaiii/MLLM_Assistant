@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "${REPO_ROOT}/scripts/model/env.sh"
+
+TRAIN_DATASET="${TRAIN_DATASET:-${MLLM_DATA_ROOT}/datasets/qwen_vl_train.jsonl}"
+EVAL_DATASET="${EVAL_DATASET:-${MLLM_DATA_ROOT}/datasets/qwen_vl_eval.jsonl}"
+OUTPUT_DIR="${OUTPUT_DIR:-${MLLM_DATA_ROOT}/runs/qwen3-vl-8b-lora-$(date +%Y%m%d-%H%M%S)}"
+TRAIN_GPU_IDS="${MLLM_TRAIN_CUDA_VISIBLE_DEVICES:-0,1,2}"
+
+IFS=, read -r -a GPU_ID_ARRAY <<<"${TRAIN_GPU_IDS}"
+NPROC_PER_NODE="${NPROC_PER_NODE:-${#GPU_ID_ARRAY[@]}}"
+
+cd "${REPO_ROOT}"
+
+echo "Starting LoRA fine-tuning on GPUs ${TRAIN_GPU_IDS}..."
+env \
+  TRAIN_DATASET="${TRAIN_DATASET}" \
+  EVAL_DATASET="${EVAL_DATASET}" \
+  OUTPUT_DIR="${OUTPUT_DIR}" \
+  MLLM_TRAIN_CUDA_VISIBLE_DEVICES="${TRAIN_GPU_IDS}" \
+  NPROC_PER_NODE="${NPROC_PER_NODE}" \
+  PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}}" \
+  IMAGE_MAX_TOKEN_NUM="${IMAGE_MAX_TOKEN_NUM:-1536}" \
+  LORA_RANK="${LORA_RANK:-16}" \
+  LORA_ALPHA="${LORA_ALPHA:-32}" \
+  LORA_DROPOUT="${LORA_DROPOUT:-0.05}" \
+  ADAPTERS="${ADAPTERS:-}" \
+  LEARNING_RATE="${LEARNING_RATE:-1e-4}" \
+  WEIGHT_DECAY="${WEIGHT_DECAY:-0.1}" \
+  WARMUP_RATIO="${WARMUP_RATIO:-0.05}" \
+  NUM_TRAIN_EPOCHS="${NUM_TRAIN_EPOCHS:-1}" \
+  LOSS_SCALE="${LOSS_SCALE:-default}" \
+  TRUNCATION_STRATEGY="${TRUNCATION_STRATEGY:-delete}" \
+  GRADIENT_CHECKPOINTING="${GRADIENT_CHECKPOINTING:-true}" \
+  SAVE_STEPS="${SAVE_STEPS:-200}" \
+  EVAL_STEPS="${EVAL_STEPS:-200}" \
+  SAVE_TOTAL_LIMIT="${SAVE_TOTAL_LIMIT:-2}" \
+  MAX_LENGTH="${MAX_LENGTH:-1536}" \
+  TORCH_EMPTY_CACHE_STEPS="${TORCH_EMPTY_CACHE_STEPS:-1}" \
+  USE_LOGITS_TO_KEEP="${USE_LOGITS_TO_KEEP:-}" \
+  TARGET_MODULES="${TARGET_MODULES:-all-linear}" \
+  FREEZE_VIT="${FREEZE_VIT:-true}" \
+  FREEZE_ALIGNER="${FREEZE_ALIGNER:-true}" \
+  bash scripts/training/finetune-lora.sh
+
+echo "LoRA fine-tuning complete."
+echo "Output dir: ${OUTPUT_DIR}"

@@ -44,3 +44,9 @@ __pycache__/
 *.pyc
 
 /src/generated/prisma
+
+# local experiment outputs and reference attachments
+/artifacts/
+/proposal(1).pdf
+/多模态要求1.jpg
+/多模态要求2.jpg

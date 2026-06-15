@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { processUploadedFiles } from "@/server/upload/upload-service";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "未授权" }, { status: 401 });
+  }
+
   const formData = await request.formData();
   const files = formData.getAll("files").filter((item): item is File => item instanceof File);
   const assetIds = formData.getAll("assetIds").map((item) => String(item));
@@ -13,10 +19,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await processUploadedFiles(files, assetIds);
+    const result = await processUploadedFiles(files, assetIds, session.user.id);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "文档解析失败，请稍后重试。";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

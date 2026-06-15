@@ -30,13 +30,22 @@ python -m pip install \
   accelerate \
   peft \
   trl \
-  qwen-vl-utils
+  qwen-vl-utils \
+  bitsandbytes \
+  deepspeed \
+  "ms-swift[llm]"
 
 python - <<'PY'
+import importlib.metadata as metadata
 import torch
 print("python ok")
 print("torch", torch.__version__)
 print("cuda available", torch.cuda.is_available())
 if torch.cuda.is_available():
     print("cuda devices", torch.cuda.device_count())
+for package in ["vllm", "ms-swift", "qwen-vl-utils", "bitsandbytes", "deepspeed"]:
+    try:
+        print(package, metadata.version(package))
+    except metadata.PackageNotFoundError:
+        print(package, "MISSING")
 PY

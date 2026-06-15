@@ -7,7 +7,7 @@ import { useCallback, useRef, useState } from "react";
 import { ProgressBar } from "@/components/upload/upload-progress";
 import { Button } from "@/components/ui/button";
 import { FileWarning, ImagePlus, Loader2, Trash2, UploadCloud } from "@/components/ui/icons";
-import { uploadFiles } from "@/lib/api";
+import { deleteUploadedAsset, uploadFiles } from "@/lib/api";
 import { createId } from "@/lib/id";
 import { cn } from "@/lib/utils";
 import { useEvidenceStore } from "@/store/evidence-store";
@@ -38,12 +38,21 @@ export function UploadDropzone({ compact = false }: { compact?: boolean }) {
         updateAssetProgress(file.id, 100);
         patchUploadedAsset(file.id, {
           routing: file.routing,
+          previewUrl: file.previewUrl,
           progress: 100,
           status: "complete",
         });
       });
     },
-    onError: (mutationError) => {
+    onError: (mutationError, variables) => {
+      variables.forEach(({ assetId }) => {
+        patchUploadedAsset(assetId, {
+          progress: 100,
+          status: "error",
+          error: "上传失败",
+        });
+      });
+
       if (mutationError instanceof AxiosError) {
         setError(mutationError.response?.data?.error ?? "OCR 服务调用失败，请稍后重试。");
         return;
@@ -61,11 +70,11 @@ export function UploadDropzone({ compact = false }: { compact?: boolean }) {
         const increments = [18, 16, 14, 12, 20];
 
         const timer = window.setInterval(() => {
-          progress = Math.min(100, progress + increments[tick % increments.length]);
+          progress = Math.min(92, progress + increments[tick % increments.length]);
           tick += 1;
           updateAssetProgress(id, progress);
 
-          if (progress >= 100) {
+          if (progress >= 92) {
             window.clearInterval(timer);
           }
         }, 220);
@@ -201,7 +210,10 @@ export function UploadDropzone({ compact = false }: { compact?: boolean }) {
                     size="icon-xs"
                     variant="ghost"
                     className="text-muted-foreground hover:text-foreground"
-                    onClick={() => removeUploadedAsset(asset.id)}
+                    onClick={() => {
+                      removeUploadedAsset(asset.id);
+                      void deleteUploadedAsset(asset.id).catch(() => undefined);
+                    }}
                     aria-label="删除文件"
                   >
                     <Trash2 className="size-3" />

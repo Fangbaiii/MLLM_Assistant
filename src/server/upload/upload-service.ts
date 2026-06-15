@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { callPaddleDocumentParsingApi, getFileType } from "@/server/upload/paddle-client";
 import type { PaddleLayoutResult } from "@/server/upload/types";
-import { persistUploadArtifact } from "@/server/upload/upload-artifact-service";
+import { getStoredUploadUrl, persistUploadArtifact } from "@/server/upload/upload-artifact-service";
 import type {
   EvidenceBlock,
   EvidenceBlockKind,
@@ -19,6 +19,9 @@ const OCR_HINT_PATTERN =
   /(doc|scan|page|screen|slide|ppt|pdf|invoice|report|note|paper|screenshot|capture|snip|home|chat|desktop|ui|dashboard|form|sheet|system|design|wechat|qq|feishu|dingtalk|notion|figma)/;
 const VISION_HINT_PATTERN =
   /(photo|camera|landscape|scenery|vacation|travel|portrait|selfie|nature|mountain|beach|sunset|pet|food)/;
+const ALLOWED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"]);
+const DEFAULT_MAX_FILES = 4;
+const DEFAULT_MAX_FILE_MB = 20;
 const execFile = promisify(execFileCallback);
 
 function isLikelyPlaceholder(value: string) {
@@ -36,6 +39,48 @@ function isPaddleConfigured() {
   const url = process.env.PADDLEOCR_DOC_PARSING_API_URL ?? "";
   const token = process.env.PADDLEOCR_ACCESS_TOKEN ?? "";
   return !isLikelyPlaceholder(url) && !isLikelyPlaceholder(token);
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return Math.floor(value);
+}
+
+function validateUploadFiles(files: File[], assetIds: string[]) {
+  const maxFiles = parsePositiveInt(process.env.MLLM_UPLOAD_MAX_FILES, DEFAULT_MAX_FILES);
+  const maxFileBytes = parsePositiveInt(process.env.MLLM_UPLOAD_MAX_FILE_MB, DEFAULT_MAX_FILE_MB) * 1024 * 1024;
+
+  if (files.length > maxFiles) {
+    throw new Error(`一次最多上传 ${maxFiles} 个文件。`);
+  }
+  if (assetIds.length && assetIds.length !== files.length) {
+    throw new Error("上传文件与附件 ID 数量不一致。");
+  }
+
+  const seenIds = new Set<string>();
+  for (const [index, file] of files.entries()) {
+    const lowerName = file.name.toLowerCase();
+    const isAllowedType =
+      ALLOWED_TYPES.has(file.type)
+      || lowerName.endsWith(".pdf")
+      || /\.(png|jpe?g|webp|gif)$/i.test(lowerName);
+    if (!isAllowedType) {
+      throw new Error(`暂不支持 ${file.name}，请上传 PDF、PNG、JPG、WEBP 或 GIF。`);
+    }
+    if (file.size > maxFileBytes) {
+      throw new Error(`${file.name} 超过 ${Math.round(maxFileBytes / 1024 / 1024)}MB 限制。`);
+    }
+    const assetId = assetIds[index]?.trim();
+    if (assetId) {
+      if (seenIds.has(assetId)) {
+        throw new Error("上传附件 ID 重复，请重新选择文件后再试。");
+      }
+      seenIds.add(assetId);
+    }
+  }
 }
 
 function stableUploadId(name: string, index: number) {
@@ -74,7 +119,7 @@ function collectConfidenceValues(input: unknown, bucket: number[] = []) {
 function computeConfidence(page: PaddleLayoutResult) {
   const values = collectConfidenceValues(page.prunedResult);
   if (!values.length) {
-    return 0.95;
+    return 0;
   }
 
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -281,23 +326,21 @@ async function shouldRouteToOcr(file: File) {
     return true;
   }
 
-  if (!isPaddleConfigured()) {
-    return false;
-  }
-
   const lowerName = file.name.toLowerCase();
   if (OCR_HINT_PATTERN.test(lowerName)) {
-    return true;
+    return isPaddleConfigured();
   }
 
   if (VISION_HINT_PATTERN.test(lowerName)) {
     return false;
   }
 
-  return true;
+  return process.env.MLLM_IMAGE_DEFAULT_ROUTE?.trim().toLowerCase() === "ocr" && isPaddleConfigured();
 }
 
-export async function processUploadedFiles(files: File[], assetIds: string[]) {
+export async function processUploadedFiles(files: File[], assetIds: string[], userId: string) {
+  validateUploadFiles(files, assetIds);
+
   const allBlocks: OcrBlock[] = [];
   const documents: EvidenceDocument[] = [];
   const mappedFiles: UploadResultFile[] = [];
@@ -309,7 +352,7 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
     if (!routeToOcr) {
       const document = buildVisionDocument(file, assetId);
       documents.push(document);
-      await persistUploadArtifact(file, assetId, "vision", document);
+      await persistUploadArtifact(file, assetId, userId, "vision", document);
       mappedFiles.push({
         id: assetId,
         name: file.name,
@@ -317,6 +360,7 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
         type: file.type,
         page: `图片 ${index + 1}`,
         routing: "vision",
+        previewUrl: getStoredUploadUrl(assetId),
       });
       continue;
     }
@@ -326,7 +370,7 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
       const document = buildEvidenceDocument(file, index, pages, assetId);
       allBlocks.push(...mapLayoutResultsToBlocks(file, index, pages, assetId));
       documents.push(document);
-      await persistUploadArtifact(file, assetId, "ocr", document);
+      await persistUploadArtifact(file, assetId, userId, "ocr", document);
       mappedFiles.push({
         id: assetId,
         name: file.name,
@@ -334,13 +378,14 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
         type: file.type,
         page: file.type === "application/pdf" ? `PDF ${index + 1}` : `图片 ${index + 1}`,
         routing: "ocr",
+        previewUrl: getStoredUploadUrl(assetId),
       });
     } catch (error) {
       // OCR 服务不可用时，图片自动降级到 Vision 路由，避免上传链路整体失败。
       if (file.type.startsWith("image/")) {
         const document = buildVisionDocument(file, assetId);
         documents.push(document);
-        await persistUploadArtifact(file, assetId, "vision", document);
+        await persistUploadArtifact(file, assetId, userId, "vision", document);
         mappedFiles.push({
           id: assetId,
           name: file.name,
@@ -348,6 +393,7 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
           type: file.type,
           page: `图片 ${index + 1}`,
           routing: "vision",
+          previewUrl: getStoredUploadUrl(assetId),
         });
         continue;
       }
@@ -383,7 +429,7 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
         };
 
         documents.push(document);
-        await persistUploadArtifact(fallbackImage, assetId, "vision", document);
+        await persistUploadArtifact(fallbackImage, assetId, userId, "vision", document);
         mappedFiles.push({
           id: assetId,
           name: file.name,
@@ -391,6 +437,7 @@ export async function processUploadedFiles(files: File[], assetIds: string[]) {
           type: file.type,
           page: `PDF ${index + 1}`,
           routing: "vision",
+          previewUrl: getStoredUploadUrl(assetId),
         });
         continue;
       }

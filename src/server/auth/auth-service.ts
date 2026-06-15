@@ -3,13 +3,14 @@ import bcrypt from "bcryptjs";
 
 export async function verifyUser(email: string, password: string) {
   try {
-    console.log(`[AuthService] Verifying user: ${email}`);
+    const normalizedEmail = email.trim().toLowerCase();
+    console.log(`[AuthService] Verifying user: ${normalizedEmail}`);
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (!user) {
-      console.log(`[AuthService] User NOT found: ${email}`);
+      console.log(`[AuthService] User NOT found: ${normalizedEmail}`);
       return null;
     }
 
@@ -33,13 +34,25 @@ export async function verifyUser(email: string, password: string) {
 
 export async function registerUser(email: string, password: string, name?: string) {
   try {
-    console.log(`[AuthService] Registering user: ${email}`);
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedName = name?.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return { error: "邮箱格式不正确" };
+    }
+    if (password.length < 8) {
+      return { error: "密码至少需要 8 位" };
+    }
+    if (normalizedName && normalizedName.length > 40) {
+      return { error: "昵称不能超过 40 个字符" };
+    }
+
+    console.log(`[AuthService] Registering user: ${normalizedEmail}`);
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existingUser) {
-      console.log(`[AuthService] Email already exists: ${email}`);
+      console.log(`[AuthService] Email already exists: ${normalizedEmail}`);
       return { error: "该邮箱已被注册" };
     }
 
@@ -47,9 +60,9 @@ export async function registerUser(email: string, password: string, name?: strin
 
     const user = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         passwordHash: hashedPassword,
-        name: name || email.split("@")[0],
+        name: normalizedName || normalizedEmail.split("@")[0],
       },
     });
 

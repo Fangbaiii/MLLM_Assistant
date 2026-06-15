@@ -25,34 +25,8 @@ type EvidenceDocumentCardProps = {
   asset?: UploadedAsset;
 };
 
-function normalizeTableHtml(content: string) {
-  const trimmed = content.trim();
-  if (!/<table[\s>]/i.test(trimmed)) {
-    return null;
-  }
-
-  return trimmed
-    .replace(/<!doctype[^>]*>/gi, "")
-    .replace(/<\/?(html|body)[^>]*>/gi, "");
-}
-
 function EvidenceTablePreview({ content }: { content: string }) {
-  const tableHtml = normalizeTableHtml(content);
-
-  if (!tableHtml) {
-    return <LazyMarkdownRenderer content={content} className="text-sidebar-foreground/84" />;
-  }
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-cyan-300/12 bg-black/10">
-      <div className="overflow-x-auto">
-        <div
-          className="evidence-html-table min-w-max text-sm text-sidebar-foreground/88"
-          dangerouslySetInnerHTML={{ __html: tableHtml }}
-        />
-      </div>
-    </div>
-  );
+  return <LazyMarkdownRenderer content={content} className="text-sidebar-foreground/84" />;
 }
 
 const blockKindLabels: Record<EvidenceBlockKind, string> = {

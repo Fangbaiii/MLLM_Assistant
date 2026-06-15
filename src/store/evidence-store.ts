@@ -8,6 +8,7 @@ type EvidenceStore = {
   ocrBlocks: OcrBlock[];
   evidenceDocuments: EvidenceDocument[];
   addUploadedAssets: (assets: UploadedAsset[]) => void;
+  setUploadedAssets: (assets: UploadedAsset[]) => void;
   updateAssetProgress: (id: string, progress: number) => void;
   patchUploadedAsset: (id: string, patch: Partial<UploadedAsset>) => void;
   removeUploadedAsset: (id: string) => void;
@@ -27,6 +28,7 @@ export const useEvidenceStore = create<EvidenceStore>()((set) => ({
   ...resetEvidenceState(),
   addUploadedAssets: (assets) =>
     set((state) => ({ uploadedAssets: [...state.uploadedAssets, ...assets] })),
+  setUploadedAssets: (assets) => set({ uploadedAssets: assets }),
   updateAssetProgress: (id, progress) =>
     set((state) => ({
       uploadedAssets: state.uploadedAssets.map((asset) =>

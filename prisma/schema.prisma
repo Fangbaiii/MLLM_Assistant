@@ -39,6 +39,7 @@ model ChatSession {
   content   String
   mode      String? // "default", "explain", "think"
   reasoning String? // 推理过程
+  attachments Json?
   createdAt DateTime    @default(now())
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

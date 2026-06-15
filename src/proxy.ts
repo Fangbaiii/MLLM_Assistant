@@ -1,10 +1,9 @@
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
 
-export default auth((req) => {
+export const proxy = auth((req) => {
   const isLoggedIn = !!req.auth
   const isOnChat = req.nextUrl.pathname.startsWith("/chat")
-  const isApiRoute = req.nextUrl.pathname.startsWith("/api")
 
   // 如果是访问聊天页面但没登录，跳登录页
   if (isOnChat && !isLoggedIn) {

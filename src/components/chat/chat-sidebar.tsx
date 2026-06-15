@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useEffect, type ReactNode } from "react";
+import { useCallback, useMemo, useState, useEffect, type ReactNode } from "react";
 import {
   Check,
   Clock3,
@@ -33,7 +33,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { modeLabel } from "@/lib/chat-commands";
-import { deleteHistorySession, fetchHistory, updateHistorySession } from "@/lib/api";
+import {
+  clearHistorySession,
+  deleteHistorySession,
+  duplicateHistorySession,
+  fetchHistory,
+  loadUploadContext,
+  updateHistorySession,
+} from "@/lib/api";
 import { clearAppCache } from "@/lib/app-cache";
 import { cn } from "@/lib/utils";
 import { useRelativeTime } from "@/hooks/use-relative-time";
@@ -222,22 +229,12 @@ export function ChatSidebar({ className }: { className?: string }) {
   const selectSession = useChatSessionStore((state) => state.selectSession);
   const newSession = useChatSessionStore((state) => state.newSession);
   const renameSession = useChatSessionStore((state) => state.renameSession);
-  const duplicateSession = useChatSessionStore((state) => state.duplicateSession);
   const deleteSession = useChatSessionStore((state) => state.deleteSession);
   const togglePinSession = useChatSessionStore((state) => state.togglePinSession);
   const clearSessionMessages = useChatSessionStore((state) => state.clearSessionMessages);
   const setSessions = useChatSessionStore((state) => state.setSessions);
   const searchQuery = useWorkbenchStore((state) => state.searchQuery);
 
-  useEffect(() => {
-    if (session?.user) {
-      fetchHistory().then((data) => {
-        if (data.sessions) {
-          setSessions(data.sessions);
-        }
-      });
-    }
-  }, [session, setSessions]);
   const darkMode = useWorkbenchStore((state) => state.darkMode);
   const reducedMotion = useWorkbenchStore((state) => state.reducedMotion);
   const demoPreference = useWorkbenchStore((state) => state.demoPreference);
@@ -247,6 +244,25 @@ export function ChatSidebar({ className }: { className?: string }) {
   const toggleReducedMotion = useWorkbenchStore((state) => state.toggleReducedMotion);
   const setDemoPreference = useWorkbenchStore((state) => state.setDemoPreference);
   const clearEvidenceWorkspace = useEvidenceStore((state) => state.clearEvidenceWorkspace);
+  const setUploadedAssets = useEvidenceStore((state) => state.setUploadedAssets);
+  const setOcrBlocks = useEvidenceStore((state) => state.setOcrBlocks);
+  const setEvidenceDocuments = useEvidenceStore((state) => state.setEvidenceDocuments);
+
+  const refreshHistory = useCallback(async (nextCurrentSessionId?: string) => {
+    const data = await fetchHistory();
+    if (data.sessions) {
+      setSessions(data.sessions);
+      if (nextCurrentSessionId) {
+        selectSession(nextCurrentSessionId);
+      }
+    }
+  }, [selectSession, setSessions]);
+
+  useEffect(() => {
+    if (session?.user) {
+      void refreshHistory();
+    }
+  }, [refreshHistory, session?.user]);
 
   const filteredSessions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -302,9 +318,32 @@ export function ChatSidebar({ className }: { className?: string }) {
     setDemoPreference(preference);
   };
 
+  const hydrateEvidenceFromSession = async (chatSession: ChatSession | undefined) => {
+    const attachments = [...(chatSession?.messages ?? [])]
+      .reverse()
+      .find((message) => message.role === "user" && message.attachments?.length)?.attachments;
+
+    if (!attachments?.length) {
+      clearEvidenceWorkspace();
+      return;
+    }
+
+    try {
+      const context = await loadUploadContext(attachments.map((asset) => asset.id));
+      setUploadedAssets(context.assets.length ? context.assets : attachments);
+      setOcrBlocks(context.ocrBlocks);
+      setEvidenceDocuments(context.documents);
+    } catch (error) {
+      console.error("恢复附件上下文失败:", error);
+      setUploadedAssets(attachments);
+      setOcrBlocks([]);
+      setEvidenceDocuments([]);
+    }
+  };
+
   const openSession = (id: string) => {
     selectSession(id);
-    clearEvidenceWorkspace();
+    void hydrateEvidenceFromSession(sessions.find((session) => session.id === id));
   };
 
   const createSession = () => {
@@ -312,10 +351,28 @@ export function ChatSidebar({ className }: { className?: string }) {
     clearEvidenceWorkspace();
   };
 
-  const clearSession = (id: string) => {
-    clearSessionMessages(id);
-    if (id === currentSessionId) {
-      clearEvidenceWorkspace();
+  const duplicateSession = async (id: string) => {
+    try {
+      const result = await duplicateHistorySession(id);
+      const duplicatedId = result.session?.id;
+      if (duplicatedId) {
+        await refreshHistory(duplicatedId);
+        await hydrateEvidenceFromSession(result.session);
+      }
+    } catch (error) {
+      console.error("复制会话失败:", error);
+    }
+  };
+
+  const clearSession = async (id: string) => {
+    try {
+      await clearHistorySession(id);
+      clearSessionMessages(id);
+      if (id === currentSessionId) {
+        clearEvidenceWorkspace();
+      }
+    } catch (error) {
+      console.error("清空失败:", error);
     }
   };
 
@@ -389,8 +446,8 @@ export function ChatSidebar({ className }: { className?: string }) {
                   onSelect={() => openSession(session.id)}
                   onRename={() => openRename(session)}
                   onTogglePin={() => handleTogglePin(session.id, !!session.pinned)}
-                  onDuplicate={() => duplicateSession(session.id)}
-                  onClear={() => clearSession(session.id)}
+                  onDuplicate={() => void duplicateSession(session.id)}
+                  onClear={() => void clearSession(session.id)}
                   onDelete={() => setDeletingSession(session)}
                 />
               ))}
@@ -409,8 +466,8 @@ export function ChatSidebar({ className }: { className?: string }) {
                 onSelect={() => openSession(session.id)}
                 onRename={() => openRename(session)}
                 onTogglePin={() => handleTogglePin(session.id, !!session.pinned)}
-                onDuplicate={() => duplicateSession(session.id)}
-                onClear={() => clearSession(session.id)}
+                onDuplicate={() => void duplicateSession(session.id)}
+                onClear={() => void clearSession(session.id)}
                 onDelete={() => setDeletingSession(session)}
               />
             ))
