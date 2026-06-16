@@ -72,6 +72,7 @@ export type UploadResultFile = {
   type: string;
   page: string;
   routing: "ocr" | "vision";
+  previewUrl: string;
 };
 
 export type EvidenceItem = {

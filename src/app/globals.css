@@ -49,6 +49,8 @@
 }
 
 :root {
+  --font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-geist-mono: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --font-serif-ui: "Noto Serif SC", "Songti SC", SimSun, "Source Han Serif SC", serif;
   --background: oklch(0.965 0.018 83);
   --foreground: oklch(0.165 0.018 78);

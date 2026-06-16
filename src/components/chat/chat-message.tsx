@@ -120,8 +120,19 @@ export function ChatMessage({ message }: { message: ChatMessageType }) {
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {message.attachments.map((asset) => (
                 <div key={asset.id} className="overflow-hidden rounded-lg border border-black/10 bg-black/5 p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={asset.previewUrl} alt={asset.name} className="aspect-[4/3] w-full rounded-md object-cover" />
+                  {asset.type === "application/pdf" ? (
+                    <a
+                      href={asset.previewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex aspect-[4/3] items-center justify-center rounded-md border border-current/15 bg-black/5 px-4 text-center text-sm underline-offset-4 hover:underline"
+                    >
+                      打开 PDF 文档
+                    </a>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={asset.previewUrl} alt={asset.name} className="aspect-[4/3] w-full rounded-md object-cover" />
+                  )}
                   <div className="mt-2 flex items-center gap-2 text-xs opacity-75">
                     <ImageIcon className="size-3.5" />
                     <span className="truncate">{asset.name}</span>

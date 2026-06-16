@@ -12,7 +12,7 @@
 ## ✨ 核心特性
 
 - 🔐 **全栈安全体系**: 集成 Auth.js (v5)，支持邮箱/密码登录与注册，具备完善的路由保护机制。
-- 📦 **持久化数据存储**: 基于 Prisma + SQLite，确保所有聊天记录、会话元数据实时落库。
+- 📦 **持久化数据存储**: 基于 Prisma + PostgreSQL，确保所有聊天记录、会话元数据实时落库。
 - 🛡️ **账号级数据隔离**: 严密的租户隔离逻辑，确保用户隐私与对话记忆的绝对独立。
 - 🧠 **动态 Prompt 引擎**: 数据库级 System Prompt 管理，预设“直接回答”、“详细解释”、“深度思考”三种专业模式。
 - 📄 **多模态文件处理**: 支持 PDF 与多格式图片上传，内置 OCR 识别流与视觉路由分发。
@@ -31,7 +31,7 @@
 
 ### 后端 (Backend)
 - **Runtime**: [Node.js](https://nodejs.org/)
-- **Database**: [SQLite](https://www.sqlite.org/) (Local File-based)
+- **Database**: [PostgreSQL](https://www.postgresql.org/)
 - **ORM**: [Prisma 6](https://www.prisma.io/)
 - **Authentication**: [Auth.js](https://authjs.dev/) (NextAuth v5 Beta)
 
@@ -40,8 +40,8 @@
 ## 🚀 快速开始
 
 ### 前置要求
-- **Node.js**: v18.0.0 或更高版本
-- **pnpm**: v9.0.0 或更高版本
+- **Node.js**: v20.0.0 或更高版本（推荐）
+- **pnpm**: v9.0.0 或更高版本（若 Corepack 异常可用 `npx -y pnpm@9.15.9`）
 
 ### 安装步骤
 
@@ -53,33 +53,79 @@
 
 2. **安装依赖**
    ```bash
-   pnpm install
+   npx -y pnpm@9.15.9 install
    ```
 
 3. **环境配置**
    在项目根目录创建 `.env` 文件，并填入以下必要变量：
    ```env
    # 数据库连接
-   DATABASE_URL="file:./dev.db"
+   DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB_NAME?schema=public&sslmode=require"
    # Auth.js 密钥 (可通过 npx auth secret 生成)
    AUTH_SECRET="your-32-character-secret-key"
    
-   # OCR 服务 (可选，接入真实 OCR 时使用)
+   # OCR 服务（同步解析）
    PADDLEOCR_DOC_PARSING_API_URL="https://your-api-url/layout-parsing"
    PADDLEOCR_ACCESS_TOKEN="your-token"
+
+   # 多模态模型服务（OpenAI-compatible）
+   MLLM_MODEL_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+   MLLM_MODEL_NAME="qwen3-vl-plus"
+   MLLM_MODEL_API_KEY="your-model-api-key"
+
+   # 上下文窗口裁剪
+   MLLM_CONTEXT_WINDOW_CHARS="18000"
+   MLLM_CONTEXT_MAX_MESSAGES="16"
+
+   # 上传文件持久化目录
+   MLLM_STORAGE_DIR="/mnt/data/tianyi/MLLM_Assistant/uploads"
    ```
 
 4. **初始化数据库**
    ```bash
-   npx prisma migrate dev --name init
+   npx prisma db push
    npx prisma db seed
    ```
 
 5. **启动开发服务器**
    ```bash
-   pnpm dev
+   npx -y pnpm@9.15.9 dev --hostname 127.0.0.1 --port 3000
    ```
    打开浏览器访问 [http://localhost:3000](http://localhost:3000)。
+
+### 本地 Qwen3-VL 部署
+
+如果你要切到本地 `Qwen3-VL-8B-Instruct` 服务，而不是云端 API，推荐使用仓库内置脚本：
+
+1. 准备本地 vLLM / 训练环境
+   ```bash
+   bash scripts/model/setup-vllm-env.sh
+   ```
+2. 下载模型
+   ```bash
+   bash scripts/model/download-qwen3-vl.sh
+   ```
+3. 启动本地 OpenAI-compatible 服务（自动按 `TP=1 -> 2 -> 4` 回退）
+   ```bash
+   MLLM_CUDA_VISIBLE_DEVICES=0,1,2,3 \
+   bash scripts/model/start-qwen3-vl.sh
+   ```
+4. 启动接入本地模型的 Web 开发环境
+   ```bash
+   bash scripts/model/start-local-web.sh
+   ```
+
+更完整的本地部署、公开数据采样、LoRA 训练与评测流程见 [docs/model-pipeline.md](docs/model-pipeline.md)。
+
+### 通过 SSH 访问（远程服务器）
+本地终端先建立端口转发：
+```bash
+ssh -N -L 3000:127.0.0.1:3000 USER@SERVER_IP
+```
+然后浏览器访问：
+```text
+http://127.0.0.1:3000/
+```
 
 ---
 
@@ -116,13 +162,17 @@
 - [x] 会话管理 (CRUD) 闭环
 - [x] 账号数据彻底隔离
 - [x] 动态 Prompt 预存系统
-- [ ] 接入 DeepSeek/OpenAI 真实流式输出
-- [ ] 接入云端 PostgreSQL 数据库
-- [ ] 支持多轮对话的上下文窗口自动裁剪
+- [x] 接入 DeepSeek/OpenAI 真实流式输出
+- [x] 接入云端 PostgreSQL 数据库
+- [x] 支持多轮对话的上下文窗口自动裁剪
+- [x] 接入 Qwen3-VL 云端多模态 API（OpenAI-compatible）
+- [x] 接入 PaddleOCR 同步文档解析（含图片/PDF 上传链路）
+- [x] 本地 Qwen3-VL OpenAI-compatible 服务脚本
+- [x] 公开多模态数据到 LoRA manifest 的转换流程
+- [ ] 中文/文档截图/自然图片方向的 LoRA 首轮正式训练
 
 ---
 
 ## 📄 开源协议
 
 本项目基于 [MIT License](LICENSE) 协议开源。
-

@@ -37,6 +37,7 @@ import {
   Settings as SettingsBase,
   ShieldCheck as ShieldCheckBase,
   Sparkles as SparklesBase,
+  Square as SquareBase,
   SunDim as SunDimBase,
   Trash2 as Trash2Base,
   UploadCloud as UploadCloudBase,
@@ -92,6 +93,7 @@ export const SendHorizontal = withHydrationSafeSvg(SendHorizontalBase, "SendHori
 export const Settings = withHydrationSafeSvg(SettingsBase, "Settings");
 export const ShieldCheck = withHydrationSafeSvg(ShieldCheckBase, "ShieldCheck");
 export const Sparkles = withHydrationSafeSvg(SparklesBase, "Sparkles");
+export const Square = withHydrationSafeSvg(SquareBase, "Square");
 export const SunDim = withHydrationSafeSvg(SunDimBase, "SunDim");
 export const Trash2 = withHydrationSafeSvg(Trash2Base, "Trash2");
 export const UploadCloud = withHydrationSafeSvg(UploadCloudBase, "UploadCloud");
